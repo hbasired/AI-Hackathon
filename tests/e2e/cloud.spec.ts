@@ -6,6 +6,9 @@ import { mockRegistries, watchErrors } from './mock';
 const WORDS = 'test only four words';
 const NEWER = 'test only newer words';
 const axe = async (page: Page, name: string) => {
+  // Stamps fade in as they land. On a slow machine a half-faded stamp reads as low contrast, so measure once
+  // every short animation has finished. Long or endless ones (the tour's timer, a spinner) are left alone.
+  await page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== 'running' || a.effect?.getTiming().iterations === Infinity || Number(a.effect?.getTiming().duration) > 2000), undefined, { timeout: 5_000 });
   const r = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze();
   expect(r.violations.map((v) => `${name}: ${v.id} ${v.nodes.slice(0, 3).map((n) => n.target.join(' ')).join(' | ')}`)).toEqual([]);
 };
