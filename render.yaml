@@ -1,0 +1,23 @@
+# Render Blueprint for this personal copy: New → Blueprint → pick this repository.
+# It runs the same Node server as `npm start` on a laptop (site, registry proxy, AI gateway).
+services:
+  - type: web
+    name: paper-trail
+    runtime: node
+    plan: free
+    branch: main
+    buildCommand: npm ci && npm run build
+    startCommand: node --disable-warning=ExperimentalWarning server/start.mjs
+    healthCheckPath: /api/health
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: NODE_VERSION
+        value: 22.19.0
+      # Optional. Each one only adds a feature; leave empty to run without it.
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENALEX_API_KEY
+        sync: false
