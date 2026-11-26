@@ -115,7 +115,9 @@ test('evidence: 13% is Verified, 31% fails, no AI and no network', async ({ page
   await axe(page, 'ask');
   await page.getByLabel('Your question').fill('What is the capital of Mongolia?');
   await page.getByRole('button', { name: 'Ask', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Not found in your library' })).toBeVisible();
+  // Phase 2: a plain "Not found", and no source is made up to fill the gap.
+  await expect(page.getByRole('heading', { name: 'Not found', exact: true })).toBeVisible();
+  await expect(page.getByText('We do not make up a study to fill the gap.', { exact: false })).toBeVisible();
   await axe(page, 'ask not found');
   await page.setViewportSize({ width: 375, height: 812 });
   await noSideways(page, 'ask');

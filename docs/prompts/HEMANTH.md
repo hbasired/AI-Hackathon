@@ -174,3 +174,13 @@ Produced:
 - `docs/DEPLOY.md` covers Vercel (recommended for the demo) and Render (needed for server-side saves), with the two things that may stop a Vercel deploy: automatic deploys are turned off in `vercel.json`, and the 95 MB model may exceed the free plan's upload limit, in which case the site falls back to the original model.
 - The pitch was fact-checked claim by claim (`docs/deck/PITCH_FACT_CHECK.md`).
 - The AI assistant did not deploy anything: the repository's rules allow a deploy only when Yash says so in the session.
+
+### Exact request: check the two live sites and the deploy screenshots
+
+> can you check the https://paper-trail-17p0.onrender.com/ if everything is correct and also check deply 2 screenshot and see if it is correct or not and is there anything to improve? if yes then push to my hbasired repo and then deploy it as well. Also check the https://paper-trail-team1.vercel.app/ if it is correct and everything is working correctly.
+
+Checked live in Chrome:
+- **Render, from `hbasired/AI-Hackathon` `main`:** healthy, with AI, an OpenAlex key and saves. All eight test-pack references got the expected labels, with the duplicate banner and the fix offered. Guardrails: "All 10 checks match what the deck says." Its scripts contain every feature of this branch.
+- **The team site on Vercel:** it runs `main` without this branch. Reference E came back Details differ, not Wrong paper. F matched a re-posted copy. G was not flagged as a duplicate, and H (the web page) was dropped silently. It has no Check fix buttons and no Guardrails page. Yash would fix this by merging `hemanth/lab-governance` (no conflicts) and deploying.
+- **The deploy2 screenshot** is the team site's Evidence page, with the old row "The sentence is in the source, exactly ✓ yes" next to a typed question. This branch already replaced that row with "Your words appear in the source". The text typed in the screenshot was a question, so Evidence now shows a gentle hint that points to Ask (`src/core/claims/shape.ts`). It never changes a label.
+- A browser test written before Phase 2 still expected the old Ask heading. It was found and updated, and every browser test file has now run after the Phase 2 changes.

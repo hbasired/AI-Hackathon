@@ -1,6 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Link } from '@/app/router';
+import { looksLikeQuestion } from '@/core/claims/shape';
 import type { StepProps } from '@/app/ProjectShell';
 import { titleOf } from '@/core/cite/preflight';
 import { directionSides, numberSides, scopeSides, type Bit, type Sides } from '@/core/claims/explain';
@@ -356,6 +357,11 @@ export function Evidence({ project }: StepProps) {
             }}
           />
         </label>
+        {looksLikeQuestion(claim) && (
+          <p className="soft" role="note">
+            This reads like a question or a task, not a claim. Evidence checks a sentence you want to write, such as “Home working led to a 13% performance increase.” To ask your sources a question, use <Link to={`/p/${project.id}/ask`}>Ask</Link>.
+          </p>
+        )}
         <MeaningSwitch on={byMeaning} state={meaning} saved={saved} onToggle={toggleMeaning} onCancel={() => {
           cancelMeaning();
           setByMeaning(false);
