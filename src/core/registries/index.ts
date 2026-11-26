@@ -33,6 +33,12 @@ export const registries: Registries = {
     const j = await getJson<{ message: { items: Record<string, unknown>[] } }>(`https://api.crossref.org/works?rows=6&query.bibliographic=${q}`, 'crossref-search');
     return (j?.message.items ?? []).map(fromCrossref).filter((r) => r.title);
   },
+  async crossrefByAuthorYear(author, year, container) {
+    // One author in one year, optionally in one journal: how an old or translated paper is found without its title.
+    const q = `query.author=${encodeURIComponent(author)}${container ? `&query.container-title=${encodeURIComponent(container.slice(0, 120))}` : ''}`;
+    const j = await getJson<{ message: { items: Record<string, unknown>[] } }>(`https://api.crossref.org/works?rows=20&${q}&filter=from-pub-date:${year - 1},until-pub-date:${year + 1}`, 'crossref-search');
+    return (j?.message.items ?? []).map(fromCrossref).filter((r) => r.title);
+  },
   async openalexSearch(title) {
     // Commas separate OpenAlex filters and a colon starts a value, so neither may appear inside the title.
     const q = encodeURIComponent(title.replace(/[,:|]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300));

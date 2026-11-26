@@ -7,7 +7,8 @@ import { findDoi, tokens } from './normalise';
  */
 
 const YEAR_PAREN = /\((\d{4})[a-z]?(?:,[^)]*)?\)/;
-const ANY_YEAR = /\b(1[89]\d{2}|20\d{2})\b/g;
+// Any year from 1500, so old papers keep their year. A number inside a page range (1650–1660) is not a year.
+const ANY_YEAR = /(?<![\d–—-])\b(1[5-9]\d{2}|20\d{2})\b(?!\s*[–—-]\s*\d)/g;
 const QUOTED_TITLE = /[“"]([^”"]{8,300}?)[,.?!]?[”"]/;
 /** Harvard puts titles in single quotes. The closing one is followed by a comma or a full stop, so ’s inside a title is safe. */
 const SINGLE_QUOTED = /^[‘'](.{8,300}?)[’'](?=[,.]|\s*$)/u;
@@ -26,7 +27,7 @@ const arxivDoi = (s: string): string | undefined => {
 /** "Hagendorff T, Fabi S, Kosinski M. Title. Journal" */
 const VANCOUVER = /^((?:[\p{Lu}][\p{L}’'\-]+(?:\s[\p{Lu}][\p{L}’'\-]+)?\s\p{Lu}{1,3}(?:,\s+|(?=\.)))+(?:et al)?)\.\s+(.{6,300}?)[.?!](?:\s|$)/u;
 /** "Leahy, S. & Mishra, P. Title. Journal" and "Ouyang, L. et al. Title (2022)" */
-const NATURE = /^((?:[\p{Lu}][\p{L}’'\- ]+,\s+(?:\p{Lu}\.[\s\-]*)+(?:,\s*|&\s*|and\s+)*)+(?:et al\.\s+)?)(.{6,300}?)(?:[.?!](?:\s|$)|\s*\((?:19|20)\d{2}\)|$)/u;
+const NATURE = /^((?:[\p{Lu}][\p{L}’'\- ]+,\s+(?:\p{Lu}\.[\s\-]*)+(?:,\s*|&\s*|and\s+)*)+(?:et al\.\s+)?)(.{6,300}?)(?:[.?!](?:\s|$)|\s*\((?:1[5-9]|20)\d{2}\)|$)/u;
 
 /** "Bloom, N., Liang, J., & Ying, Z. J." or "Bloom N, Liang J" or "N. Bloom, J. Liang and Z. Ying" */
 export function parseAuthors(s: string): string[] {
@@ -56,6 +57,21 @@ export function parseAuthors(s: string): string[] {
     if (words.length) out.push(words[words.length - 1]!);
   }
   return out.filter((x) => x.length > 1);
+}
+
+/** Words whose full stop does not end a title: "A letter of Mr. Isaac Newton", "Dr. Jekyll", "St. Kilda", "vs. Germany". */
+const ABBREVIATION = /(?:^|[\s(])(?:Mr|Mrs|Ms|Messrs|Dr|St|Ste|Prof|Rev|Revd|Sr|Jr|Mt|Ft|Gen|Col|Capt|Lt|Gov|Sen|Hon|vs|viz|cf|approx|ca|Vol|Nos?|Fig|Figs|Eq|Eqs|Ed|Eds|Co|Inc|Ltd|Bros|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sept?|Oct|Nov|Dec)$/i;
+/** Where an APA or Harvard title ends: the first full stop, question or exclamation mark before a capital or a digit. */
+function titleEnd(s: string): number {
+  for (const m of s.matchAll(/[.?!](?=\s+[\p{Lu}\d]|\s*$)/gu)) {
+    const i = m.index!;
+    if (i < 6 || i > 300) continue;
+    const before = s.slice(0, i);
+    // An initial (J. or U.S.) or an abbreviation is not the end of the title.
+    if (m[0] === '.' && (/[A-Z.]$/.test(before) || ABBREVIATION.test(before))) continue;
+    return i;
+  }
+  return -1;
 }
 
 /** Reads one reference written in APA, Harvard, IEEE, MLA or Chicago style, as far as it can. */
@@ -99,11 +115,11 @@ export function parseReference(line: string): RawReference {
     const quoted = after.match(SINGLE_QUOTED) ?? after.match(QUOTED_TITLE) ?? before.match(QUOTED_TITLE);
     if (quoted) ref.title = quoted[1]!.trim();
     else {
-      const stop = after.match(/^(.{6,300}?[^A-Z.])(?:[.?!]\s+(?=[\p{Lu}\d])|[.?!]$|$)/u);
-      const title = (stop?.[1] ?? after.split(/\.\s/)[0] ?? '').trim();
-      const q = stop && after[stop[1]!.length] === '?' ? '?' : '';
+      const end = titleEnd(after);
+      const title = (end >= 0 ? after.slice(0, end) : after.length <= 300 ? after.replace(/[.?!]$/, '') : (after.split(/\.\s/)[0] ?? '')).trim();
+      const q = end >= 0 && after[end] === '?' ? '?' : '';
       if (title) ref.title = (title + q).replace(/\s*\[[^\]]*\]$/, '');
-      const rest = after.slice((stop?.[1]?.length ?? title.length) + 1).trim();
+      const rest = after.slice((end >= 0 ? end : title.length) + 1).trim();
       const cont = rest.match(/^([^,.\d]{3,120})/);
       if (cont) ref.container = cont[1]!.trim();
     }
@@ -169,7 +185,7 @@ const looksLikeReference =(l: string): boolean => {
   if (n < 5 || l.length > 900) return false;
   if (findDoi(l) || arxivDoi(l)) return true;
   const bare = l.replace(NUMBERED, '');
-  if (/\b(?:19|20)\d{2}\b/.test(l) && (VANCOUVER.test(bare) || NATURE.test(bare))) return true;
+  if (/\b(?:1[5-9]|20)\d{2}\b/.test(l) && (VANCOUVER.test(bare) || NATURE.test(bare))) return true;
   if (NUMBERED.test(l) && (YEAR_PAREN.test(l) || QUOTED_TITLE.test(l))) return true;
   return /^[\p{Lu}\p{L}][^()]{1,260}\((?:\d{4})[a-z]?(?:,[^)]*)?\)\.?\s+\S/u.test(l) && /[.,]/.test(l.slice(0, l.indexOf('(')));
 };

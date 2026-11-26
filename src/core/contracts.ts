@@ -30,6 +30,8 @@ export type ReasonCode =
   | 'NO_DOI_ONE_REGISTRY'
   | 'WEB_SOURCE'
   | 'TITLE_ONLY'
+  | 'TITLE_MAY_BE_TRANSLATED'
+  | 'LATER_REPRINT'
   | 'REGISTRY_METADATA_DISAGREES'
   | 'NOT_ENOUGH_TO_SEARCH'
   | 'QUOTE_NOT_IN_SOURCE'
@@ -303,6 +305,8 @@ export const REASON_TEXT: Record<ReasonCode, string> = {
   NO_DOI_ONE_REGISTRY: 'Found by title and authors in one registry, with no DOI. Many real papers have none. Check the publisher’s page before you rely on it.',
   WEB_SOURCE: 'A web page, not a scholarly work, so it was not checked in a scholarly database. Open the page and check who published it and when.',
   TITLE_ONLY: 'Only a title was given, and different works can share a title. Add the authors and year, or the DOI, and check again.',
+  TITLE_MAY_BE_TRANSLATED: 'The title differs, but the first author, the year and the first page match this record. It may be the same work under a longer or original-language title, or a translation. Check it, then use the registry’s title or keep yours with a reason.',
+  LATER_REPRINT: 'Only a later reprint or edition with this title was found. The original, from the year you gave, is not in the registries we searched (many older journals have no DOI). Keep your year; do not change it to the reprint’s.',
   REGISTRY_METADATA_DISAGREES: 'The registries returned different identity metadata. Review the original records.',
   NOT_ENOUGH_TO_SEARCH: 'There is not enough here to search with. Add a title or a DOI.',
   QUOTE_NOT_IN_SOURCE: 'These words are not in the source.',
