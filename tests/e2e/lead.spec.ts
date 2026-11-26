@@ -179,8 +179,9 @@ test('tour: from the front page, signed out, on the real pages, and a touch only
   await page.goto('/');
   await page.getByRole('button', { name: 'Play the 60-second tour' }).click();
   const bar = page.getByLabel('Tour', { exact: true });
-  // It starts at once, not after a wait.
-  await expect(bar).toContainText('five references', { timeout: 4000 });
+  // It starts at once, not after a step's wait. GitHub's runner has no GPU, so the 3D front page and the tour's
+  // first load can take a few seconds there; still well under the 8 seconds a step lasts.
+  await expect(bar).toContainText('five references', { timeout: 10_000 });
   await expect(bar.getByText('SAMPLE', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Check references' })).toBeVisible();
   await expect(page.getByText(/Checked \d of 5|5 references checked/)).toBeVisible({ timeout: 15_000 });

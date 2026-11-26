@@ -15,6 +15,8 @@ export interface Registries {
   dataciteByDoi(doi: string): Promise<RegistryRecord | null>;
   doiExists(doi: string): Promise<boolean>;
   crossrefSearch(query: string): Promise<RegistryRecord[]>;
+  /** Crossref by first author and year (and journal, if given): finds a work whose title was translated or changed. Optional. */
+  crossrefByAuthorYear?(author: string, year: number, container?: string): Promise<RegistryRecord[]>;
   /** OpenAlex by title, for a reference with no DOI that Crossref holds no clean match for. Optional. */
   openalexSearch?(title: string): Promise<RegistryRecord[]>;
   /** The shipped Retraction Watch index. null means it has no notice for this DOI. Optional: it can only add a warning. */
@@ -55,6 +57,27 @@ const reasonsFrom = (c: Comparison): ReasonCode[] => {
   if (!r.includes('AUTHOR_DIFFERS') && !c.authorsUnknown && !c.firstAuthor) r.push('AUTHOR_DIFFERS');
   return r;
 };
+
+/** The first page the student gave, from the reference text (not from a DOI or web address). */
+export function firstPageGiven(ref: RawReference): string | undefined {
+  const text = ref.raw.replace(/https?:\/\/\S+/gi, ' ').replace(/\b10\.\d{4,9}\/\S+/g, ' ');
+  // A year range such as 2014–2015 is not a page range; pages 1650–1712 are.
+  const isYears = (a: string, b: string) => /^(1[5-9]|20)\d\d$/.test(a) && /^(1[5-9]|20)\d\d$/.test(b) && Number(b) - Number(a) >= 0 && Number(b) - Number(a) <= 3;
+  const ranges = [...text.matchAll(/(?:pp?\.\s*)?\b([A-Za-z]?\d{1,6})\s*[–—-]\s*([A-Za-z]?\d{1,6})\b/g)].filter((m) => !isYears(m[1]!, m[2]!));
+  return ranges.at(-1)?.[1];
+}
+const fold = (s: string): string => s.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z]/g, '');
+/**
+ * The same slot in the literature: first author, year and first page all match. A translated or changed title does not
+ * change these, and two papers by one author in one year do not share a first page.
+ */
+export function sameSlot(ref: RawReference, rec: RegistryRecord): boolean {
+  const page = firstPageGiven(ref);
+  const recPage = rec.pages?.match(/^\s*([A-Za-z]?\d+)/)?.[1];
+  const first = ref.authors?.[0];
+  // One year either way: old calendar dates (1671/72) and online-first or print years differ by one.
+  return !!(page && recPage && first && rec.authors[0] && ref.year && rec.year && Math.abs(rec.year - ref.year) <= 1 && page.toLowerCase() === recPage.toLowerCase() && fold(first) === fold(rec.authors[0].family));
+}
 
 export async function checkReference(ref: RawReference, reg: Registries, now: () => string = () => new Date().toISOString()): Promise<ReferenceCheck> {
   const trace: RegistryTrace[] = [];
@@ -118,6 +141,11 @@ export async function checkReference(ref: RawReference, reg: Registries, now: ()
       if (rw.ok) record = withRetractionWatch(record, rw.value);
     }
     const bareDoi = viaDoi && !ref.title && !ref.authors?.length && tokens(ref.raw).length <= 8;
+    // A different title, but the same first author, year and first page: likely a translation or an older title, not another paper.
+    if (ref.title && c.title < 0.6 && sameSlot(ref, record)) {
+      if (record.retracted) return done('retracted', ['RETRACTED', 'TITLE_MAY_BE_TRANSLATED'], record, c);
+      return done('details-differ', ['TITLE_MAY_BE_TRANSLATED', ...reasonsFrom(c).filter((r) => r !== 'TITLE_DIFFERS')], record, c);
+    }
     if (viaDoi && !bareDoi && ref.title && c.title < 0.6) return done('wrong-paper', ['DOI_IS_ANOTHER_PAPER'], record, c);
     // None of the student's authors is on the DOI's record: the DOI belongs to other people's work, even with the same title.
     if (viaDoi && !bareDoi && (ref.authors?.length ?? 0) > 0 && !c.authorsUnknown && !c.firstAuthor && c.authors === 0) return done('wrong-paper', ['DOI_IS_ANOTHER_PAPER', 'AUTHOR_DIFFERS'], record, c);
@@ -128,6 +156,8 @@ export async function checkReference(ref: RawReference, reg: Registries, now: ()
     const clean = (): ReferenceCheck => (second === 'matched' ? done('confirmed', [], record, c) : done('one-registry', [second === 'disagrees' ? 'REGISTRY_METADATA_DISAGREES' : second === 'missing' ? 'SECOND_REGISTRY_NO_RECORD' : 'SECOND_REGISTRY_UNREACHABLE'], record, c));
     if (bareDoi) return clean();
     const reasons = reasonsFrom(c);
+    // Found by search, same title, but five or more years later: a reprint or later edition, not the original. No year fix.
+    if (!viaDoi && ref.year && record.year && record.year - ref.year >= 5 && c.title >= th.titleMatch) return done('details-differ', ['LATER_REPRINT', ...reasons.filter((r) => r !== 'YEAR_DIFFERS')], record, c);
     if (c.title >= th.titleMatch && !reasons.length) return clean();
     return done('details-differ', reasons.length ? reasons : ['TITLE_DIFFERS'], record, c);
   };
@@ -153,7 +183,18 @@ export async function checkReference(ref: RawReference, reg: Registries, now: ()
       if (dc.ok && dc.value) return judge(dc.value, false);
     }
     const reasons = reasonsFrom(top.c);
+    if (ref.year && top.r.year && top.r.year - ref.year >= 5) return done('details-differ', ['LATER_REPRINT', ...reasons.filter((r) => r !== 'YEAR_DIFFERS')], top.r, top.c);
     return reasons.length ? done('details-differ', reasons, top.r, top.c) : done('one-registry', [top.r.doi ? 'SECOND_REGISTRY_NO_RECORD' : 'NO_DOI_ONE_REGISTRY'], top.r, top.c);
+  };
+
+  /** The work in the same slot (first author, year, first page), found without its title. Null unless exactly one fits. */
+  const bySlot = async (): Promise<ReferenceCheck | null> => {
+    const first = ref.authors?.[0];
+    if (!reg.crossrefByAuthorYear || !first || !ref.year || !firstPageGiven(ref)) return null;
+    const s = await timed(trace, 'crossref', () => reg.crossrefByAuthorYear!(first, ref.year!, ref.container), (v) => (v.some((r) => sameSlot(ref, r)) ? 'match' : 'no-match'), (v) => `${v.length} works by the first author within a year of ${ref.year}`);
+    if (!s.ok) return null;
+    const fits = [...new Map(s.value.filter((r) => sameSlot(ref, r)).map((r) => [r.doi ?? r.id, r])).values()];
+    return fits.length === 1 ? judge(fits[0]!, false) : null;
   };
 
   let doiMissing = false;
@@ -186,13 +227,13 @@ export async function checkReference(ref: RawReference, reg: Registries, now: ()
   if (!best || best.c.title < th.titlePossible) {
     last.status = 'no-match';
     if (doiUnknown) return done('could-not-check', ['REGISTRY_UNREACHABLE']);
-    const other = await fromOpenAlexSearch(-Infinity);
+    const other = (!ref.doi ? await bySlot() : null) ?? (await fromOpenAlexSearch(-Infinity));
     if (other) return other;
     return done('not-found', doiMissing ? ['DOI_DOES_NOT_EXIST', 'NO_MATCH_IN_REGISTRIES'] : ['NO_MATCH_IN_REGISTRIES']);
   }
   if (!best.c.firstAuthor && best.c.authors === 0 && best.c.title < 0.97) {
     last.status = 'no-match';
-    const other = await fromOpenAlexSearch(-Infinity);
+    const other = (!ref.doi ? await bySlot() : null) ?? (await fromOpenAlexSearch(-Infinity));
     if (other) return other;
     return done('not-found', doiMissing ? ['DOI_DOES_NOT_EXIST', 'NO_MATCH_IN_REGISTRIES'] : ['NO_MATCH_IN_REGISTRIES'], undefined, best.c);
   }
@@ -209,6 +250,12 @@ export async function checkReference(ref: RawReference, reg: Registries, now: ()
     }
   }
   // Not a clean match by search alone: OpenAlex may hold the work itself where Crossref held a copy (a re-posted PDF, say).
+  // No clean match (often a later reprint, or a translated title): first look for the work by first author, year and
+  // first page, the strongest identity there is; then ask OpenAlex by title.
+  if (res.verdict !== 'confirmed' && res.verdict !== 'retracted' && !ref.doi) {
+    const slot = await bySlot();
+    if (slot) res = slot;
+  }
   if (res.verdict !== 'confirmed' && res.verdict !== 'retracted') {
     const other = await fromOpenAlexSearch(rank(best.c));
     if (other) res = other;

@@ -184,3 +184,22 @@ Checked live in Chrome:
 - **The team site on Vercel:** it runs `main` without this branch. Reference E came back Details differ, not Wrong paper. F matched a re-posted copy. G was not flagged as a duplicate, and H (the web page) was dropped silently. It has no Check fix buttons and no Guardrails page. Yash would fix this by merging `hemanth/lab-governance` (no conflicts) and deploying.
 - **The deploy2 screenshot** is the team site's Evidence page, with the old row "The sentence is in the source, exactly ✓ yes" next to a typed question. This branch already replaced that row with "Your words appear in the source". The text typed in the screenshot was a question, so Evidence now shows a gentle hint that points to Ask (`src/core/claims/shape.ts`). It never changes a label.
 - A browser test written before Phase 2 still expected the old Ask heading. It was found and updated, and every browser test file has now run after the Phase 2 changes.
+
+### Exact requests: old papers, and where to push
+
+> The platform is not listing the 1905 Einstein's paper can we make it check to that long back
+
+> I not only need only einstein's paper I asked but all of those that date back to 1900's or more old.
+
+> push only to my github of hbasired. And also deploy to render should happen automatically.
+
+Found by running real papers live: the age of a paper was not the problem (Einstein 1905 by DOI or German title was Confirmed). The problems were translated titles, later reprints, years before 1800, the compact citation styles before 1900, and titles cut at "Mr.". General rules added, none naming a paper:
+- **A different title, but the same first author, year (±1) and first page as the record:** Details differ, `TITLE_MAY_BE_TRANSLATED`, never Wrong paper. A DOI of another paper by the same author in the same year still has other pages, so it stays Wrong paper.
+- **No DOI:** the work is looked up by first author, year and first page before the OpenAlex title search (`crossrefByAuthorYear`).
+- **The same title found only five or more years later:** `LATER_REPRINT`, and no year fix is offered.
+- **Years:** read from 1500 on, and a page range is not read as a year. Compact-style lines with years before 1900 are kept when a list is pasted. Plan accepts a start year from 1500.
+- **Titles:** they no longer end at the full stop of an abbreviation (Mr., Dr., St., vs. and others).
+
+Live run of 10 real old papers (Newton 1672, Maxwell 1865 in two styles, Planck 1901, Rutherford 1911, Einstein 1905, Turing 1936, Watson and Crick 1953, Fleming 1929, Darwin 1859): each found the original from its own time. Fleming 1929 has no DOI and is One registry only. No wrong year fix was offered. The Phase 2 pack and the Lab sample are unchanged.
+
+Pushed only to `hbasired/AI-Hackathon`, as asked, so Render deploys it. Not pushed to the team repository.

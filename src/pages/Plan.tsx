@@ -37,7 +37,7 @@ export function Plan({ project }: StepProps) {
 
   async function approve() {
     const y = Number(fromYear);
-    if (fromYear && !(y >= 1900 && y <= 2100)) {
+    if (fromYear && !(y >= 1500 && y <= 2100)) {
       setError('Use a four-digit year, or leave it empty.');
       return;
     }
